@@ -10,6 +10,7 @@ import pandas as pd
 from pathlib import Path
 import plotly.graph_objects as go
 from PIL import Image
+import os
 
 
 def render_checkpoint_indicator(current_checkpoint: str):
@@ -344,23 +345,20 @@ def render_insight_review(hitl: HITLStateManager) -> bool:
 
 def render_final_report_approval(hitl: HITLStateManager) -> bool:
     """
-    Render final report preview and approval UI.
+    Render final report preview and approval UI with section-by-section review.
     Returns True if report is approved.
     """
     st.header("📄 Checkpoint 4: Final Report Approval")
     st.markdown("---")
     
+    report_structure = hitl.state.get('report_structure', {})
     report_preview = hitl.state.get('report_preview', '')
     
-    if not report_preview:
+    if not report_structure and not report_preview:
         st.warning("Report preview not generated yet.")
         return False
     
-    st.info("**Final report preview generated.** Please review and approve to generate the final report.")
-    
-    # Display report preview
-    st.subheader("Report Preview")
-    st.markdown(report_preview)
+    st.info("**Final report structure generated.** Please review and edit each section before approving.")
     
     # Show summary of approved content
     st.subheader("Approved Content Summary")
@@ -375,6 +373,140 @@ def render_final_report_approval(hitl: HITLStateManager) -> bool:
     with col3:
         st.metric("Insights", len(hitl.state.get('approved_insights', [])))
     
+    st.markdown("---")
+    
+    # Section-by-section review if structure exists
+    if report_structure:
+        sections = report_structure.get('sections', [])
+        
+        if sections:
+            st.subheader("📝 Report Sections Review & Editing")
+            st.markdown("Review and edit each section. Your edits will override AI-generated content.")
+            
+            for section in sections:
+                section_id = section.get('id', '')
+                section_title = section.get('title', 'Section')
+                section_type = section.get('type', 'text')
+                approval_status = hitl.state.get('report_section_approvals', {}).get(section_id, ApprovalStatus.PENDING.value)
+                
+                # Get current content (edited if available)
+                current_content = hitl.state.get('report_section_edits', {}).get(section_id, section.get('content', ''))
+                
+                with st.expander(f"📄 {section_title} - {approval_status.upper()}", expanded=(approval_status == ApprovalStatus.PENDING.value)):
+                    # Display and edit section based on type
+                    if section_type == 'text':
+                        edited_content = st.text_area(
+                            f"Edit {section_title}:",
+                            value=current_content if isinstance(current_content, str) else str(current_content),
+                            height=200,
+                            key=f"report_section_edit_{section_id}",
+                            help="Edit this section. Your edits will override AI-generated content."
+                        )
+                        
+                        if edited_content != current_content:
+                            if st.button(f"💾 Save Edits", key=f"save_section_{section_id}"):
+                                hitl.edit_report_section(section_id, edited_content)
+                                st.success("Edits saved!")
+                                st.rerun()
+                    
+                    elif section_type == 'list':
+                        # For lists, show as editable text area (user can edit as text)
+                        list_text = '\n'.join(current_content) if isinstance(current_content, list) else str(current_content)
+                        edited_text = st.text_area(
+                            f"Edit {section_title} (one item per line):",
+                            value=list_text,
+                            height=200,
+                            key=f"report_section_edit_{section_id}",
+                            help="Edit list items, one per line."
+                        )
+                        
+                        if edited_text != list_text:
+                            if st.button(f"💾 Save Edits", key=f"save_section_{section_id}"):
+                                # Convert back to list
+                                edited_list = [line.strip() for line in edited_text.split('\n') if line.strip()]
+                                hitl.edit_report_section(section_id, edited_list)
+                                st.success("Edits saved!")
+                                st.rerun()
+                        else:
+                            # Display as list
+                            st.markdown("**Current Content:**")
+                            for item in (current_content if isinstance(current_content, list) else [current_content]):
+                                st.markdown(f"- {item}")
+                    
+                    elif section_type == 'charts':
+                        # For charts, show chart catalog with editable explanations
+                        st.markdown("**Chart Catalog:**")
+                        chart_catalog = current_content if isinstance(current_content, list) else []
+                        
+                        for chart in chart_catalog:
+                            chart_id = chart.get('id', '')
+                            chart_title = chart.get('title', 'Chart')
+                            chart_explanation = chart.get('explanation', '')
+                            
+                            with st.container():
+                                col1, col2 = st.columns([1, 2])
+                                with col1:
+                                    st.markdown(f"**{chart_title}**")
+                                    # Try to show chart preview
+                                    chart_path = chart.get('path', '')
+                                    if chart_path and Path(chart_path).exists():
+                                        try:
+                                            from PIL import Image
+                                            img = Image.open(chart_path)
+                                            st.image(img, use_container_width=True)
+                                        except:
+                                            st.info("Chart preview unavailable")
+                                
+                                with col2:
+                                    edited_explanation = st.text_area(
+                                        f"Explanation for {chart_title}:",
+                                        value=chart_explanation,
+                                        height=100,
+                                        key=f"chart_explanation_{chart_id}",
+                                        help="Edit the chart explanation."
+                                    )
+                                    
+                                    if edited_explanation != chart_explanation:
+                                        chart['explanation'] = edited_explanation
+                                        hitl.edit_report_section(section_id, chart_catalog)
+                                        st.success("Chart explanation updated!")
+                    
+                    # Section approval controls
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button(f"✅ Approve Section", key=f"approve_section_{section_id}", use_container_width=True):
+                            hitl.approve_report_section(section_id)
+                            st.rerun()
+                    
+                    with col2:
+                        if st.button(f"❌ Reject Section", key=f"reject_section_{section_id}", use_container_width=True):
+                            hitl.reject_report_section(section_id)
+                            st.rerun()
+                    
+                    # Status indicator
+                    if approval_status == ApprovalStatus.APPROVED.value:
+                        st.success("✅ Section Approved")
+                    elif approval_status == ApprovalStatus.EDITED.value:
+                        st.info("✏️ Section Edited & Approved")
+                    elif approval_status == ApprovalStatus.REJECTED.value:
+                        st.error("❌ Section Rejected")
+                    else:
+                        st.info("⏳ Section Pending")
+                    
+                    st.markdown("---")
+            
+            # Check if all sections are approved
+            section_approvals = hitl.state.get('report_section_approvals', {})
+            approved_sections = [sid for sid, status in section_approvals.items() 
+                               if status in [ApprovalStatus.APPROVED.value, ApprovalStatus.EDITED.value]]
+            
+            st.metric("Approved Sections", len(approved_sections), len(sections))
+    
+    # Show simple preview if no structure
+    if not report_structure and report_preview:
+        st.subheader("Report Preview")
+        st.markdown(report_preview)
+    
     # Feedback
     st.subheader("Feedback (Optional)")
     feedback = st.text_area(
@@ -383,51 +515,129 @@ def render_final_report_approval(hitl: HITLStateManager) -> bool:
         key="report_feedback"
     )
     
-    # Approval buttons
+    # Final approval buttons
+    st.markdown("---")
     col1, col2 = st.columns(2)
     
+    approval_status = hitl.state.get('report_approval', ApprovalStatus.PENDING.value)
+    
     with col1:
-        if st.button("✅ Approve & Generate Report", type="primary", use_container_width=True):
-            hitl.approve_report(feedback)
-            st.success("Report approved! Generating final report...")
-            st.rerun()
+        if approval_status != ApprovalStatus.APPROVED.value:
+            if st.button("✅ Approve & Generate Report", type="primary", use_container_width=True):
+                # Check if all sections approved (if structure exists)
+                if report_structure:
+                    sections = report_structure.get('sections', [])
+                    section_approvals = hitl.state.get('report_section_approvals', {})
+                    all_approved = all(
+                        section_approvals.get(s.get('id'), '') in [ApprovalStatus.APPROVED.value, ApprovalStatus.EDITED.value]
+                        for s in sections
+                    )
+                    if not all_approved:
+                        st.error("⚠️ Please approve all sections before generating the final report.")
+                    else:
+                        hitl.approve_report(feedback)
+                        st.success("Report approved! Generating final report...")
+                        st.rerun()
+                else:
+                    hitl.approve_report(feedback)
+                    st.success("Report approved! Generating final report...")
+                    st.rerun()
+        else:
+            st.success("✅ Approved")
     
     with col2:
-        if st.button("❌ Reject", use_container_width=True):
-            hitl.reject_report(feedback)
-            st.error("Report rejected. Please review and regenerate.")
-            st.rerun()
+        if approval_status != ApprovalStatus.REJECTED.value:
+            if st.button("❌ Reject", use_container_width=True):
+                hitl.reject_report(feedback)
+                st.error("Report rejected. Please review and regenerate.")
+                st.rerun()
+        else:
+            st.error("❌ Rejected")
     
     # Show current status
-    approval_status = hitl.state.get('report_approval', ApprovalStatus.PENDING.value)
     if approval_status == ApprovalStatus.APPROVED.value:
-        st.success("✅ Final report has been approved.")
+        st.success("✅ Final report has been approved. Report will be generated.")
         return True
     elif approval_status == ApprovalStatus.REJECTED.value:
-        st.error("❌ Final report has been rejected.")
+        st.error("❌ Final report has been rejected. Please review and regenerate.")
         return False
     
     return False
 
 
-def render_completed_report(hitl: HITLStateManager, final_report: str = None):
+def render_completed_report(hitl: HITLStateManager, final_report: str = None, final_report_html: str = None):
     """Render completed report view"""
     st.header("✅ Analysis Complete!")
     st.markdown("---")
     
-    if final_report:
-        st.markdown(final_report)
-    else:
-        st.info("Final report will be displayed here.")
+    # Show HTML report if available
+    report_html = hitl.state.get('final_report_html', '') or final_report_html
     
-    # Download button
-    if final_report:
+    if report_html:
+        st.success("🎉 Final report has been generated successfully!")
+        
+        # Display HTML report
+        st.subheader("📄 Interactive HTML Report")
+        st.components.v1.html(report_html, height=800, scrolling=True)
+        
+        # Download buttons
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.download_button(
+                label="📥 Download HTML Report",
+                data=report_html,
+                file_name="interactive_analysis_report.html",
+                mime="text/html",
+                use_container_width=True
+            )
+        
+        with col2:
+            if final_report:
+                st.download_button(
+                    label="📥 Download Text Report",
+                    data=final_report,
+                    file_name="analysis_report.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+        
+        # Show report file path
+        from pathlib import Path
+        report_file = Path(__file__).parent / "interactive_analysis_report.html"
+        if report_file.exists():
+            st.info(f"📁 Report saved to: `{report_file}`")
+    
+    elif final_report:
+        st.markdown("### Text Report")
+        st.markdown(final_report)
+        
         st.download_button(
             label="📥 Download Report",
             data=final_report,
             file_name="analysis_report.txt",
             mime="text/plain"
         )
+    else:
+        st.info("Final report will be displayed here.")
+    
+    # Show summary
+    st.markdown("---")
+    st.subheader("📊 Analysis Summary")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Analyses", len(hitl.state.get('approved_analyses', [])))
+    
+    with col2:
+        st.metric("Charts", len(hitl.state.get('approved_charts', [])))
+    
+    with col3:
+        st.metric("Insights", len(hitl.state.get('approved_insights', [])))
+    
+    with col4:
+        sections = hitl.state.get('report_structure', {}).get('sections', [])
+        st.metric("Report Sections", len(sections))
 
 
 def render_hitl_main_ui(hitl: HITLStateManager, orchestrator_result: Dict[str, Any] = None):
@@ -456,7 +666,8 @@ def render_hitl_main_ui(hitl: HITLStateManager, orchestrator_result: Dict[str, A
     
     elif current_checkpoint == Checkpoint.COMPLETED.value:
         final_report = orchestrator_result.get('final_report', '') if orchestrator_result else None
-        render_completed_report(hitl, final_report)
+        final_report_html = orchestrator_result.get('final_report_html', '') if orchestrator_result else None
+        render_completed_report(hitl, final_report, final_report_html)
     
     else:
         st.info("Workflow initialized. Waiting to start analysis...")

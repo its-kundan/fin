@@ -5,6 +5,7 @@ from executor import IntelligentAnalysisExecutor
 from visualizer import ComprehensiveVisualizationGenerator
 from autoviz_charts import AutovizChartGenerator
 from hitl_state import HITLStateManager, Checkpoint, ApprovalStatus
+from hitl_report_generator import HITLReportGenerator
 
 from typing import TypedDict, List, Dict, Any, Optional, Tuple
 import pandas as pd
@@ -22,6 +23,7 @@ class IntelligentAnalysisOrchestrator:
         self.planner = IntelligentAnalysisPlanner(groq_api_key)
         self.insight_generator = EnhancedInsightGenerator(groq_api_key)
         self.hitl = hitl_state_manager or HITLStateManager()
+        self.report_generator = HITLReportGenerator(self.hitl)
     
     def analyze_dataset(self, df: pd.DataFrame, dataset_name: str = "Dataset", 
                        wait_for_approval: bool = True) -> Dict[str, Any]:
@@ -407,45 +409,87 @@ class IntelligentAnalysisOrchestrator:
         }
     
     def _continue_after_insights(self, df: pd.DataFrame, state: IntelligentAnalysisState) -> Dict[str, Any]:
-        """Continue workflow after insight approval - generate report preview"""
+        """Continue workflow after insight approval - generate report structure"""
         print("\n" + "="*80)
-        print(" CHECKPOINT 4: Generating Final Report Preview")
+        print(" CHECKPOINT 4: Generating Final Report Structure")
         print("="*80)
         
-        # Generate report preview from approved content
+        # Generate report structure from approved content
         approved_content = self.hitl.get_approved_content()
+        
+        # Generate structured report for section-by-section review
+        report_structure = self.report_generator.generate_report_structure(approved_content, state)
+        
+        # Also generate simple preview for backward compatibility
         report_preview = self._generate_report_preview(approved_content, state)
         
+        # Set both structure and preview
+        self.hitl.set_report_structure(report_structure)
         self.hitl.set_report_preview(report_preview)
         self.hitl.update_checkpoint(Checkpoint.FINAL_REPORT_APPROVAL)
         
         print("\n⏸️  PAUSED: Waiting for human approval of final report...")
-        print("   Report preview generated. Please review and approve in the UI.")
+        print(f"   Report structure generated with {len(report_structure.get('sections', []))} sections.")
+        print("   Please review and edit each section before approving in the UI.")
         
         return {
             'status': 'paused',
             'checkpoint': Checkpoint.FINAL_REPORT_APPROVAL.value,
             'state': state,
             'hitl_state': self.hitl.to_dict(),
+            'report_structure': report_structure,
             'report_preview': report_preview,
-            'message': 'Final report preview generated. Please review and approve.'
+            'message': 'Final report structure generated. Please review and edit sections before approving.'
         }
     
     def _continue_after_report_preview(self, df: pd.DataFrame, state: IntelligentAnalysisState) -> Dict[str, Any]:
         """Generate final report after approval"""
-        print("\n Generating final report from approved content...")
+        print("\n Generating final report from approved and edited content...")
+        
+        # Get approved content
         approved_content = self.hitl.get_approved_content()
-        final_report = self._generate_final_report(approved_content, state)
+        
+        # Get report structure with applied edits
+        report_structure = self.hitl.get_edited_report_structure()
+        
+        # Get section edits
+        section_edits = self.hitl.state.get('report_section_edits', {})
+        
+        # Generate HTML report using HITL report generator
+        final_report_html = self.report_generator.generate_html_report(
+            report_structure,
+            edited_sections=section_edits
+        )
+        
+        # Save HTML report to file
+        from pathlib import Path
+        output_file = Path(__file__).parent / "interactive_analysis_report.html"
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(final_report_html)
+            print(f"✅ Final HTML report saved to: {output_file}")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not save HTML report: {e}")
+        
+        # Store in HITL state
+        self.hitl.set_final_report_html(final_report_html)
+        
+        # Also generate text preview for compatibility
+        final_report_text = self._generate_final_report(approved_content, state)
+        
         self.hitl.update_checkpoint(Checkpoint.COMPLETED)
         
         print(f"\n✅ Intelligent analysis complete!")
         print(f"   Approved analyses: {len(approved_content['analyses'])}")
         print(f"   Approved charts: {len(approved_content['charts'])}")
         print(f"   Approved insights: {len(approved_content['insights'])}")
+        print(f"   Report sections: {len(report_structure.get('sections', []))}")
         
         return {
             'status': 'completed',
-            'final_report': final_report,
+            'final_report': final_report_text,
+            'final_report_html': final_report_html,
+            'report_file': str(output_file),
             'state': state,
             'hitl_state': self.hitl.to_dict(),
             'dataset_info': {

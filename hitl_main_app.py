@@ -261,6 +261,13 @@ def render_workflow_ui():
     # Render the appropriate checkpoint UI
     render_hitl_main_ui(hitl, st.session_state.orchestrator_result)
     
+    # If completed, show download options
+    if current_checkpoint == Checkpoint.COMPLETED.value:
+        final_report_html = st.session_state.orchestrator_result.get('final_report_html', '') if st.session_state.orchestrator_result else None
+        if final_report_html:
+            st.markdown("---")
+            st.success("✅ Report generation complete! Use the download buttons above to save the report.")
+    
     # Add continue buttons for chart and insight checkpoints
     if current_checkpoint == Checkpoint.CHART_REVIEW.value:
         approved_charts = hitl.state.get('approved_charts', [])

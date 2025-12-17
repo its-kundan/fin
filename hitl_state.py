@@ -54,9 +54,13 @@ class HITLState(TypedDict):
     
     # Final Report
     report_preview: str
+    report_structure: Dict[str, Any]  # Structured report sections
+    report_section_edits: Dict[str, Any]  # section_id -> edited_content
+    report_section_approvals: Dict[str, str]  # section_id -> ApprovalStatus
     report_approval: str  # ApprovalStatus
     report_feedback: str
     final_report_generated: bool
+    final_report_html: str  # Generated HTML report
     
     # User feedback and comments
     user_feedback: List[Dict[str, Any]]  # {checkpoint, timestamp, comment}
@@ -95,9 +99,13 @@ class HITLStateManager:
             insight_feedback={},
             approved_insights=[],
             report_preview="",
+            report_structure={},
+            report_section_edits={},
+            report_section_approvals={},
             report_approval=ApprovalStatus.PENDING.value,
             report_feedback="",
             final_report_generated=False,
+            final_report_html="",
             user_feedback=[],
             approval_flags={},
             session_id=self.session_id,
@@ -204,6 +212,56 @@ class HITLStateManager:
         self.state['report_approval'] = ApprovalStatus.PENDING.value
         self.state['report_feedback'] = ""
         self.state['last_updated'] = datetime.now().isoformat()
+    
+    def set_report_structure(self, structure: Dict[str, Any]):
+        """Set report structure for section-by-section review"""
+        self.state['report_structure'] = structure
+        # Initialize all sections as pending
+        for section in structure.get('sections', []):
+            section_id = section.get('id')
+            if section_id:
+                self.state['report_section_approvals'][section_id] = ApprovalStatus.PENDING.value
+        self.state['last_updated'] = datetime.now().isoformat()
+    
+    def edit_report_section(self, section_id: str, edited_content: Any):
+        """Edit a report section (human override)"""
+        self.state['report_section_edits'][section_id] = edited_content
+        self.state['report_section_approvals'][section_id] = ApprovalStatus.EDITED.value
+        self.state['last_updated'] = datetime.now().isoformat()
+    
+    def approve_report_section(self, section_id: str, feedback: str = ""):
+        """Approve a report section"""
+        self.state['report_section_approvals'][section_id] = ApprovalStatus.APPROVED.value
+        if feedback:
+            self._add_feedback("report_section_approval", f"Section {section_id}: {feedback}")
+        self.state['last_updated'] = datetime.now().isoformat()
+    
+    def reject_report_section(self, section_id: str, feedback: str = ""):
+        """Reject a report section"""
+        self.state['report_section_approvals'][section_id] = ApprovalStatus.REJECTED.value
+        if feedback:
+            self._add_feedback("report_section_approval", f"Section {section_id}: {feedback}")
+        self.state['last_updated'] = datetime.now().isoformat()
+    
+    def set_final_report_html(self, html_content: str):
+        """Set the final generated HTML report"""
+        self.state['final_report_html'] = html_content
+        self.state['final_report_generated'] = True
+        self.state['last_updated'] = datetime.now().isoformat()
+    
+    def get_edited_report_structure(self) -> Dict[str, Any]:
+        """Get report structure with applied edits"""
+        structure = self.state.get('report_structure', {}).copy()
+        edits = self.state.get('report_section_edits', {})
+        
+        # Apply edits to sections
+        for section in structure.get('sections', []):
+            section_id = section.get('id')
+            if section_id in edits:
+                section['content'] = edits[section_id]
+                section['edited'] = True
+        
+        return structure
     
     def approve_report(self, feedback: str = ""):
         """Approve final report"""
