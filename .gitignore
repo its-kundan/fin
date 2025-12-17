@@ -1,0 +1,250 @@
+# ============================================
+# Python
+.env
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# ============================================
+# Project-specific: Generated files
+# ============================================
+
+# Database files (generated from CSV)
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated charts and images
+charts/
+charts_html/
+autoviz/
+AutoViz_Plots/
+autoviz_temp/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+chart.png
+
+# Generated HTML reports (keep template HTML files if needed)
+*.html
+!pages/*.html
+# Uncomment to keep specific template HTML files:
+# !1a.html
+# !1b.html
+# !1c.html
+# !2ac.html
+
+# Analysis results and reports (generated)
+analysis_report*.txt
+analysis_results.*
+# Allow config JSON files but ignore data/results JSON
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!*.config.json
+
+# Data files (typically large, should be downloaded separately)
+# Uncomment the line below if you want to keep sample data files
+# !Superstore.csv
+*.csv
+*.xlsx
+*.xls
+*.parquet
+*.feather
+*.h5
+*.hdf5
+
+# ============================================
+# Environment & Secrets
+# ============================================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ============================================
+# IDE & Editor
+# ============================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ============================================
+# OS Files
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============================================
+# Testing & Coverage
+# ============================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+nosetests.xml
+coverage.xml
+*.cover
+.cache
+
+# ============================================
+# Type Checking
+# ============================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# ============================================
+# Logs & Temporary Files
+# ============================================
+*.log
+*.log.*
+logs/
+*.tmp
+*.temp
+temp/
+tmp/
+*.bak
+*.backup
+
+# ============================================
+# Framework-specific
+# ============================================
+# Streamlit
+.streamlit/
+
+# Django (if applicable)
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask (if applicable)
+instance/
+.webassets-cache
+
+# ============================================
+# Documentation
+# ============================================
+docs/_build/
+/site
+
+# ============================================
+# Other
+# ============================================
+# Profiling
+.prof
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Scrapy
+.scrapy
+
+# PyBuilder
+target/
+
+# SageMath
+*.sage.py
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# Cython
+cython_debug/
+
+# Translations
+*.mo
+*.pot
